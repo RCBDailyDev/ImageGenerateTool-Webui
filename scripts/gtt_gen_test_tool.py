@@ -6,19 +6,27 @@ from modules.shared import opts, OptionInfo
 
 try:
     import gtt_util as util
+    import gtt_tab_use_dataset as dataset_ui
 except:
     import scripts.gtt_util as util
+    import scripts.gtt_tab_use_dataset as dataset_ui
 
 import importlib
 
 importlib.reload(util)
+importlib.reload(dataset_ui)
 
 
 def on_tab_ui():
+    util.get()
     with gr.Blocks(analytics_enabled=False, css=r"..\style.css") as gen_test:
         with gr.Row():
             with gr.Column():
                 gr.HTML("<h2>生成测试</h2>")
+                with gr.Tab("使用训练集生成"):
+                    dataset_ui.tab_ui()
+                with gr.Tab("使用csv生成"):
+                    gr.HTML("<h2>使用csv生成</h2>")
             with gr.Column():
                 gr.Image(interactive=False)
 
