@@ -82,6 +82,8 @@ class ConfigMgr(object):
             return self.json_settings[key]
         return default
 
+    def set_cfg_value(self, key, value):
+        self.json_settings[key] = value
 
 def get() -> ConfigMgr:
     return ConfigMgr()
