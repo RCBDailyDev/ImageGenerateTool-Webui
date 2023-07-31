@@ -4,6 +4,7 @@ import gradio as gr
 from PIL import Image
 
 from modules.call_queue import wrap_gradio_gpu_call
+from modules.sd_samplers import samplers
 
 try:
     import gtt_util as util
@@ -33,6 +34,8 @@ def tab_ui():
             sl_img_height = gr.Slider(label='图片高', value=512, minimum=16, maximum=2048, step=1, interactive=True)
         ch_use_default_size = gr.Checkbox(label='仅使用默认图片尺寸')
         with gr.Row():
+            dr_sampler = gr.Dropdown(label='Sampling method', elem_id=f"sampling",
+                                     choices=[" ", *[x.name for x in samplers]], value=" ", type="value")
             sl_cfg_scale = gr.Slider(label='CFG强度', value=7, minimum=1, maximum=30, step=1, interactive=True)
             sl_sample_step = gr.Slider(label='采样步数')
     with gr.Box():
@@ -65,8 +68,23 @@ def tab_ui():
                 return img_path
         return None
 
+    def make_final_prompt(p: str, prompt: str, block_prompt: [str], prompt_mode, replace_prompt):
+        if prompt_mode == '直接使用':
+            return prompt
+        p_list = p.split(',')
+        new_p_list = []
+        for i in p_list:
+            if i not in block_prompt:
+                new_p_list.append(i)
+        if len(new_p_list) <= 0:
+            new_p = ""
+        else:
+            new_p = ",".join(new_p_list)
+        return (prompt + "," + new_p, new_p)
+
     def prepare_gen_info(src_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
                          block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt,
+                         sampler,
                          data_type='data_set'):
         if os.path.exists(src_dir) and os.path.isdir(src_dir):
             prompt_info_list = []  # [(txt_file_name, prompt, has_img, img_w, img_h)]
@@ -91,15 +109,15 @@ def tab_ui():
                                 img_h = img.height
                         prompt_info_list.append((f_name, p, has_img, img_w, img_h))
             if len(prompt_info_list) > 0:
-                print(prompt_info_list)
-
 
         return []
 
     def btn_generate_click(_pid, src_dir, dst_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
-                           block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt):
+                           block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt, sampler):
+
         gen_info = prepare_gen_info(src_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
-                                    block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt)
+                                    block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt,
+                                    sampler)
         return "", ""
 
     btn_generate.click(fn=wrap_gradio_gpu_call(btn_generate_click), _js='do_process',
@@ -108,7 +126,7 @@ def tab_ui():
                                sl_img_width, sl_img_height,
                                ch_use_default_size,
                                sl_cfg_scale, sl_sample_step, tx_prompt, tx_prompt_block, tx_neg_prompt,
-                               rd_count_mod, num_gen_count, ch_prompt_mode, tx_replace_prompt],
+                               rd_count_mod, num_gen_count, ch_prompt_mode, tx_replace_prompt, dr_sampler],
                        outputs=[tx_param_buffer1, tx_param_buffer2])
 
     def save_cfg_on_change(*args):
