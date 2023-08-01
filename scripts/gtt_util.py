@@ -85,5 +85,16 @@ class ConfigMgr(object):
     def set_cfg_value(self, key, value):
         self.json_settings[key] = value
 
+
 def get() -> ConfigMgr:
     return ConfigMgr()
+
+
+@Singleton
+class PreviewMgr(object):
+    def __init__(self):
+        self.curr_preview = None
+
+
+def get_prev_mgr() -> PreviewMgr:
+    return PreviewMgr()

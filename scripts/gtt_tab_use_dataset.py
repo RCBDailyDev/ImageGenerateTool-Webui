@@ -1,16 +1,20 @@
 import os.path
+import random
 
 import gradio as gr
 from PIL import Image
 
+from modules import shared
 from modules.call_queue import wrap_gradio_gpu_call
 from modules.sd_samplers import samplers
 
 try:
     import gtt_util as util
+    import gtt_gen_img as gen
 
 except:
     import scripts.gtt_util as util
+    import scripts.gtt_gen_img as gen
 
 img_ext_list = [".png", ".jpg", ".tga", ".bmp", ".webp"]
 
@@ -35,9 +39,11 @@ def tab_ui():
         ch_use_default_size = gr.Checkbox(label='仅使用默认图片尺寸')
         with gr.Row():
             dr_sampler = gr.Dropdown(label='Sampling method', elem_id=f"sampling",
-                                     choices=[" ", *[x.name for x in samplers]], value=" ", type="value")
+                                     choices=[" ", *[x.name for x in samplers]], value="Euler a", type="value")
+            dr_sampler.__setattr__("do_not_save_to_config", True)
             sl_cfg_scale = gr.Slider(label='CFG强度', value=7, minimum=1, maximum=30, step=1, interactive=True)
-            sl_sample_step = gr.Slider(label='采样步数')
+            sl_sample_step = gr.Slider(label='采样步数', value=20, interactive=True)
+            sl_sample_step.__setattr__("do_not_save_to_config", True)
     with gr.Box():
         gr.HTML("<p>关键词设置</p>")
         ch_prompt_mode = gr.Radio(choices=["添加", "直接使用"], value='添加')
@@ -54,6 +60,7 @@ def tab_ui():
 
     tx_param_buffer1 = gr.Text(visible=False)
     tx_param_buffer2 = gr.Text(visible=False)
+
 
     def find_img(r, file_name):
         '''
@@ -80,7 +87,10 @@ def tab_ui():
             new_p = ""
         else:
             new_p = ",".join(new_p_list)
-        return (prompt + "," + new_p, new_p)
+        combine_p = new_p
+        if prompt:
+            combine_p = prompt + "," + new_p
+        return (combine_p, new_p)
 
     def prepare_gen_info(src_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
                          block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt,
@@ -109,6 +119,26 @@ def tab_ui():
                                 img_h = img.height
                         prompt_info_list.append((f_name, p, has_img, img_w, img_h))
             if len(prompt_info_list) > 0:
+                ret_list = []
+                if count_mode == "每个数据":
+                    choice_list = prompt_info_list * int(gen_count)
+                else:
+                    choice_list = random.choices(prompt_info_list, k=int(gen_count))
+                for p_info in choice_list:
+                    gen_info_dic = {}
+                    final_prompt = make_final_prompt(p_info[1], prompt, block_prompt, prompt_mode, replace_prompt)
+                    gen_info_dic["file_name"] = p_info[0]
+                    gen_info_dic["prompt"] = final_prompt[0]
+                    gen_info_dic["origin_p"] = final_prompt[1]
+                    gen_info_dic["neg_prompt"] = neg_prompt
+                    gen_info_dic["cfg_scale"] = cfg_scale
+                    gen_info_dic["sample_step"] = sample_step
+                    gen_info_dic["sampler"] = sampler if sampler else 'Euler a'
+                    gen_info_dic["use_image"] = p_info[2]
+                    gen_info_dic["img_width"] = p_info[3]
+                    gen_info_dic["img_height"] = p_info[4]
+                    ret_list.append(gen_info_dic)
+                return ret_list
 
         return []
 
@@ -118,6 +148,19 @@ def tab_ui():
         gen_info = prepare_gen_info(src_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
                                     block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt,
                                     sampler)
+        shared.state.begin()
+        shared.state.job = 'gen_reg_image'
+        shared.state.textinfo = "Processing Image"
+
+        shared.state.job_count = len(gen_info)
+        shared.state.job_no = 0
+        i = 0
+        for info_dic in gen_info:
+            img = gen.gen_image(info_dic)
+            print(img)
+            i += 1
+            shared.state.textinfo = "Generating : " + str((i + 1)) + "/" + str(len(gen_info))
+        shared.state.end()
         return "", ""
 
     btn_generate.click(fn=wrap_gradio_gpu_call(btn_generate_click), _js='do_process',
