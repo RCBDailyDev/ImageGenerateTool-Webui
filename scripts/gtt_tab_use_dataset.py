@@ -1,3 +1,4 @@
+import hashlib
 import os.path
 import random
 
@@ -31,8 +32,7 @@ def tab_ui():
         tx_output_dir = gr.Text(label="输出路径", value=cfg_mgr.get_cfg_value('tx_output_dir', util.default_path))
         tx_output_dir.__setattr__("do_not_save_to_config", True)
         util.create_open_folder_button(tx_output_dir, "btn_tx_output_dir")
-    with gr.Box():
-        gr.HTML("<p>默认参数</p>")
+    with gr.Accordion(label="默认参数", open=False):
         with gr.Row():
             sl_img_width = gr.Slider(label='图片宽', value=512, minimum=16, maximum=2048, step=1, interactive=True)
             sl_img_height = gr.Slider(label='图片高', value=512, minimum=16, maximum=2048, step=1, interactive=True)
@@ -44,23 +44,27 @@ def tab_ui():
             sl_cfg_scale = gr.Slider(label='CFG强度', value=7, minimum=1, maximum=30, step=1, interactive=True)
             sl_sample_step = gr.Slider(label='采样步数', value=20, interactive=True)
             sl_sample_step.__setattr__("do_not_save_to_config", True)
-    with gr.Box():
-        gr.HTML("<p>关键词设置</p>")
-        ch_prompt_mode = gr.Radio(choices=["添加", "直接使用"], value='添加')
+    with gr.Accordion(label="关键词设置", open=False):
+        ch_prompt_mode = gr.Radio(label="关键词模式", choices=["添加", "直接使用"], value='添加')
         tx_prompt = gr.Textbox(label="关键词", lines=3)
         tx_prompt_block = gr.Textbox(label="屏蔽关键词", lines=3)
         tx_neg_prompt = gr.Textbox(label="反向关键词", lines=3)
         tx_replace_prompt = gr.Textbox(label="替换关键词", lines=1)
-    with gr.Box():
+    with gr.Accordion(label="数量模式"):
         with gr.Row():
-            rd_count_mod = gr.Radio(choices=["每个数据", "绝对数量"], value='每个数据')
+            rd_count_mod = gr.Radio(label="数量模式", choices=["每个数据", "绝对数量"], value='每个数据')
         num_gen_count = gr.Number(label="生成数量", value=10)
+    with gr.Box():
+        ch_save_prompt = gr.Checkbox(label="保存标注", value=cfg_mgr.get_cfg_value("ch_save_prompt", True))
+        ch_save_prompt.__setattr__("do_not_save_to_config", True)
+        rd_prompt_save_mode = gr.Radio(show_label=False, choices=["原始","包含附加","固定"], value="原始", interactive=True)
+        tx_fix_save_prompt = gr.Textbox(label="固定标注", lines=1)
+
     btn_generate = gr.Button(value='Generate', elem_id="gtt_btn_generate")
     btn_cancel = gr.Button(value='Cancel', elem_id="gtt_btn_cancel", visible=False)
 
     tx_param_buffer1 = gr.Text(visible=False)
     tx_param_buffer2 = gr.Text(visible=False)
-
 
     def find_img(r, file_name):
         '''
@@ -77,7 +81,7 @@ def tab_ui():
 
     def make_final_prompt(p: str, prompt: str, block_prompt: [str], prompt_mode, replace_prompt):
         if prompt_mode == '直接使用':
-            return prompt
+            return prompt, prompt
         p_list = p.split(',')
         new_p_list = []
         for i in p_list:
@@ -90,7 +94,7 @@ def tab_ui():
         combine_p = new_p
         if prompt:
             combine_p = prompt + "," + new_p
-        return (combine_p, new_p)
+        return combine_p, new_p
 
     def prepare_gen_info(src_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
                          block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt,
@@ -143,7 +147,8 @@ def tab_ui():
         return []
 
     def btn_generate_click(_pid, src_dir, dst_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
-                           block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt, sampler):
+                           block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt, sampler,
+                           save_prompt,save_prompt_mode, fix_save_prompt):
 
         gen_info = prepare_gen_info(src_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
                                     block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt,
@@ -154,31 +159,62 @@ def tab_ui():
 
         shared.state.job_count = len(gen_info)
         shared.state.job_no = 0
+        shared.state.interrupted = False
+
         i = 0
         for info_dic in gen_info:
-            img = gen.gen_image(info_dic)
-            print(img)
+            if shared.state.interrupted:
+                break
+            imgs = gen.gen_image(info_dic)
+            preview_mgr = util.get_prev_mgr()
+            preview_mgr.curr_preview = imgs[0]
+            if dst_dir:
+                os.makedirs(dst_dir, exist_ok=True)
+                file_name = hashlib.sha1(imgs[0].tobytes()).hexdigest()
+                save_path = os.path.join(dst_dir, str(file_name) + ".png")
+                imgs[0].save(save_path)
+                if save_prompt:
+                    save_path_txt = os.path.join(dst_dir, str(file_name) + ".txt")
+                    if save_prompt_mode == "固定" and len(fix_save_prompt) <= 0:
+                        pass
+                    else:
+                        with open(save_path_txt, 'w') as txt:
+                            if save_prompt_mode == "原始":
+                                txt.write(info_dic["origin_p"])
+                            elif save_prompt_mode == "包含附加":
+                                txt.write(info_dic["prompt"])
+                            else:
+                                txt.write(fix_save_prompt)
+
             i += 1
             shared.state.textinfo = "Generating : " + str((i + 1)) + "/" + str(len(gen_info))
         shared.state.end()
         return "", ""
 
-    btn_generate.click(fn=wrap_gradio_gpu_call(btn_generate_click), _js='do_process',
+    btn_generate.click(fn=wrap_gradio_gpu_call(btn_generate_click), _js='gtt_do_process',
                        inputs=[tx_param_buffer1,
                                tx_dataset_dir, tx_output_dir,
                                sl_img_width, sl_img_height,
                                ch_use_default_size,
                                sl_cfg_scale, sl_sample_step, tx_prompt, tx_prompt_block, tx_neg_prompt,
-                               rd_count_mod, num_gen_count, ch_prompt_mode, tx_replace_prompt, dr_sampler],
+                               rd_count_mod, num_gen_count, ch_prompt_mode, tx_replace_prompt, dr_sampler,
+                               ch_save_prompt, rd_prompt_save_mode,tx_fix_save_prompt],
                        outputs=[tx_param_buffer1, tx_param_buffer2])
+
+    def btn_cancel_click():
+        shared.state.interrupted = True
+
+    btn_cancel.click(fn=btn_cancel_click, inputs=[], outputs=[])
 
     def save_cfg_on_change(*args):
         global json_settings
         cfg_mgr = util.get()
         cfg_mgr.set_cfg_value("tx_dataset_dir", args[0])
         cfg_mgr.set_cfg_value("tx_output_dir", args[1])
+        cfg_mgr.set_cfg_value("ch_save_prompt", args[2])
         cfg_mgr.save_json_setting()
 
-    tx_list = [tx_dataset_dir, tx_output_dir]
-    tx_dataset_dir.blur(fn=save_cfg_on_change, inputs=tx_list, outputs=None)
-    tx_output_dir.blur(fn=save_cfg_on_change, inputs=tx_list, outputs=None)
+    save_com_list = [tx_dataset_dir, tx_output_dir, ch_save_prompt]
+    tx_dataset_dir.blur(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
+    tx_output_dir.blur(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
+    ch_save_prompt.change(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)

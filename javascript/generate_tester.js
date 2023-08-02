@@ -1,5 +1,5 @@
 
-function do_process() {
+function gtt_do_process() {
     let a = args_to_array(arguments)
     var id = randomId()
     let btn_run = gradioApp().querySelector("#gtt_btn_generate");

@@ -29,7 +29,8 @@ def on_tab_ui():
                     gr.HTML("<h2>使用csv生成</h2>")
             with gr.Column():
                 gr.HTML(elem_id="gtt_progress_bar1")
-                img_preview = gr.Image(interactive=False)
+                img_preview = gr.Image(interactive=False, type='pil')
+                img_preview.style(width=1024, height=768)
 
         btn_update = gr.Button(visible=False, elem_id="gtt_btn_update")
         tx_buffer = gr.Text(visible=False)
@@ -43,7 +44,7 @@ def on_tab_ui():
             return None, ""
 
         btn_update.click(fn=btn_update_click, inputs=[img_preview],
-                         outputs=[img_preview, tx_buffer])
+                         outputs=[img_preview, tx_buffer], show_progress=False)
 
     return (gen_test, "GenerateTester", "rcb_gen_tester"),
 
