@@ -57,8 +57,12 @@ def tab_ui():
     with gr.Box():
         ch_save_prompt = gr.Checkbox(label="保存标注", value=cfg_mgr.get_cfg_value("ch_save_prompt", True))
         ch_save_prompt.__setattr__("do_not_save_to_config", True)
-        rd_prompt_save_mode = gr.Radio(show_label=False, choices=["原始","包含附加","固定"], value="原始", interactive=True)
-        tx_fix_save_prompt = gr.Textbox(label="固定标注", lines=1)
+        rd_prompt_save_mode = gr.Radio(show_label=False, choices=["原始", "包含附加", "固定"], value="原始",
+                                       interactive=True)
+        tx_fix_save_prompt = gr.Textbox(label="固定标注", lines=1, value=cfg_mgr.get_cfg_value('tx_fix_save_prompt', "bad-image"), interactive=True)
+        tx_fix_save_prompt.__setattr__("do_not_save_to_config", True)
+    with gr.Box():
+        ch_keep_tree = gr.Checkbox(label="保持文件层级")
 
     btn_generate = gr.Button(value='Generate', elem_id="gtt_btn_generate")
     btn_cancel = gr.Button(value='Cancel', elem_id="gtt_btn_cancel", visible=False)
@@ -121,7 +125,7 @@ def tab_ui():
                                 img = Image.open(img_path)
                                 img_w = img.width
                                 img_h = img.height
-                        prompt_info_list.append((f_name, p, has_img, img_w, img_h))
+                        prompt_info_list.append((f_name, p, has_img, img_w, img_h, img_path))
             if len(prompt_info_list) > 0:
                 ret_list = []
                 if count_mode == "每个数据":
@@ -141,6 +145,7 @@ def tab_ui():
                     gen_info_dic["use_image"] = p_info[2]
                     gen_info_dic["img_width"] = p_info[3]
                     gen_info_dic["img_height"] = p_info[4]
+                    gen_info_dic["img_path"] = p_info[5]
                     ret_list.append(gen_info_dic)
                 return ret_list
 
@@ -148,7 +153,7 @@ def tab_ui():
 
     def btn_generate_click(_pid, src_dir, dst_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
                            block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt, sampler,
-                           save_prompt,save_prompt_mode, fix_save_prompt):
+                           save_prompt, save_prompt_mode, fix_save_prompt, keep_tree):
 
         gen_info = prepare_gen_info(src_dir, w, h, only_default_size, cfg_scale, sample_step, prompt,
                                     block_prompt, neg_prompt, count_mode, gen_count, prompt_mode, replace_prompt,
@@ -171,10 +176,19 @@ def tab_ui():
             if dst_dir:
                 os.makedirs(dst_dir, exist_ok=True)
                 file_name = hashlib.sha1(imgs[0].tobytes()).hexdigest()
-                save_path = os.path.join(dst_dir, str(file_name) + ".png")
+                true_dir = dst_dir
+                if keep_tree:
+                    if info_dic["img_path"] is None:
+                        true_dir = os.path.join(true_dir, "AutoGen", "auto_gen")
+                        os.makedirs(true_dir, exist_ok=True)
+                    else:
+                        rel = os.path.dirname(os.path.relpath(info_dic["img_path"], src_dir))
+                        true_dir = os.path.join(true_dir, rel)
+                        os.makedirs(true_dir, exist_ok=True)
+                save_path = os.path.join(true_dir, str(file_name) + ".png")
                 imgs[0].save(save_path)
                 if save_prompt:
-                    save_path_txt = os.path.join(dst_dir, str(file_name) + ".txt")
+                    save_path_txt = os.path.join(true_dir, str(file_name) + ".txt")
                     if save_prompt_mode == "固定" and len(fix_save_prompt) <= 0:
                         pass
                     else:
@@ -198,7 +212,7 @@ def tab_ui():
                                ch_use_default_size,
                                sl_cfg_scale, sl_sample_step, tx_prompt, tx_prompt_block, tx_neg_prompt,
                                rd_count_mod, num_gen_count, ch_prompt_mode, tx_replace_prompt, dr_sampler,
-                               ch_save_prompt, rd_prompt_save_mode,tx_fix_save_prompt],
+                               ch_save_prompt, rd_prompt_save_mode, tx_fix_save_prompt, ch_keep_tree],
                        outputs=[tx_param_buffer1, tx_param_buffer2])
 
     def btn_cancel_click():
@@ -212,9 +226,11 @@ def tab_ui():
         cfg_mgr.set_cfg_value("tx_dataset_dir", args[0])
         cfg_mgr.set_cfg_value("tx_output_dir", args[1])
         cfg_mgr.set_cfg_value("ch_save_prompt", args[2])
+        cfg_mgr.set_cfg_value("tx_fix_save_prompt", args[3])
         cfg_mgr.save_json_setting()
 
-    save_com_list = [tx_dataset_dir, tx_output_dir, ch_save_prompt]
+    save_com_list = [tx_dataset_dir, tx_output_dir, ch_save_prompt,tx_fix_save_prompt]
     tx_dataset_dir.blur(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
     tx_output_dir.blur(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
     ch_save_prompt.change(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
+    tx_fix_save_prompt.change(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
