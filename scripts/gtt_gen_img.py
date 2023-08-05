@@ -16,11 +16,15 @@ def gen_image(gen_info):
             steps=gen_info['sample_step'],
             cfg_scale=gen_info['cfg_scale'],
             width=gen_info['img_width'],
-            height=gen_info['img_width'],
+            height=gen_info['img_height'],
             do_not_save_grid=True,
             do_not_save_samples=True,
             do_not_reload_embeddings=True
         )
+        ##TODO:DELETE
+        print(gen_info['img_width'])
+        print(gen_info['img_height'])
+
         p.seed = -1
         if type(p.prompt) == list:
             p.all_prompts = [shared.prompt_styles.apply_styles_to_prompt(x, p.styles) for x in p.prompt]
