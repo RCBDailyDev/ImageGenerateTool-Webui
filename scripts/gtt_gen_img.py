@@ -16,7 +16,7 @@ def gen_image(gen_info):
             steps=gen_info['sample_step'],
             cfg_scale=gen_info['cfg_scale'],
             width=gen_info['img_width'],
-            height=gen_info['img_width'],
+            height=gen_info['img_height'],
             do_not_save_grid=True,
             do_not_save_samples=True,
             do_not_reload_embeddings=True
