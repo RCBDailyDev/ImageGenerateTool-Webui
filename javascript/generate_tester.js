@@ -1,4 +1,5 @@
 
+let gtt_mutationObserver
 function gtt_do_process() {
     let a = args_to_array(arguments)
     var id = randomId()
@@ -22,13 +23,13 @@ function gtt_do_process() {
     //     load_effect.style.display = "none"
     // }
     let progressBar2 = gradioApp().querySelector('.progress')
-    tt_mutationObserver = tt_mutationObserver || new MutationObserver(function (m) {
+    gtt_mutationObserver = gtt_mutationObserver || new MutationObserver(function (m) {
         let update_btn = gradioApp().querySelector("#gtt_btn_update")
         update_btn.click()
     })
 
 
-    tt_mutationObserver.observe(progressBar2, {childList: true, subtree: true})
+    gtt_mutationObserver.observe(progressBar2, {childList: true, subtree: true})
     a[0] = id
     return a
 }

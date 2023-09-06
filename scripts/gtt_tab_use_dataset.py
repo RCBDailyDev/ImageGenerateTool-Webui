@@ -59,7 +59,9 @@ def tab_ui():
         ch_save_prompt.__setattr__("do_not_save_to_config", True)
         rd_prompt_save_mode = gr.Radio(show_label=False, choices=["原始", "包含附加", "固定"], value="原始",
                                        interactive=True)
-        tx_fix_save_prompt = gr.Textbox(label="固定标注", lines=1, value=cfg_mgr.get_cfg_value('tx_fix_save_prompt', "bad-image"), interactive=True)
+        tx_fix_save_prompt = gr.Textbox(label="固定标注", lines=1,
+                                        value=cfg_mgr.get_cfg_value('tx_fix_save_prompt', "bad-image"),
+                                        interactive=True)
         tx_fix_save_prompt.__setattr__("do_not_save_to_config", True)
     with gr.Box():
         ch_keep_tree = gr.Checkbox(label="保持文件层级")
@@ -129,7 +131,10 @@ def tab_ui():
             if len(prompt_info_list) > 0:
                 ret_list = []
                 if count_mode == "每个数据":
-                    choice_list = prompt_info_list * int(gen_count)
+                    choice_list = []
+                    for p in prompt_info_list:
+                        for i in range(0, int(gen_count)):
+                            choice_list.append(p)
                 else:
                     choice_list = random.choices(prompt_info_list, k=int(gen_count))
                 for p_info in choice_list:
@@ -229,7 +234,7 @@ def tab_ui():
         cfg_mgr.set_cfg_value("tx_fix_save_prompt", args[3])
         cfg_mgr.save_json_setting()
 
-    save_com_list = [tx_dataset_dir, tx_output_dir, ch_save_prompt,tx_fix_save_prompt]
+    save_com_list = [tx_dataset_dir, tx_output_dir, ch_save_prompt, tx_fix_save_prompt]
     tx_dataset_dir.blur(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
     tx_output_dir.blur(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
     ch_save_prompt.change(fn=save_cfg_on_change, inputs=save_com_list, outputs=None)
